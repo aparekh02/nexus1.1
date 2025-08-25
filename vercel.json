@@ -6,20 +6,12 @@
       "config": {
         "distDir": "frontend/dist"
       }
-    },
-    {
-      "src": "backend/*.py",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/backend/$1"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/frontend/$1"
+      "dest": "/frontend/dist/$1"
     }
   ]
 }
