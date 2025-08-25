@@ -23,5 +23,5 @@
       "dest": "backend/app.py"
     }
   ],
-  "installCommand": "pnpm install"
+  "installCommand": "pnpm install --no-frozen-lockfile"
 }
