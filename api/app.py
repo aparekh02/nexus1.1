@@ -3147,8 +3147,4 @@ def get_comments(post_id):
         print(f"Error getting comments: {e}")
         return jsonify({"error": "Failed to get comments"}), 500
 
-# ==================== END POSTS API ====================
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
 
