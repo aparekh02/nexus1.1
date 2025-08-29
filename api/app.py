@@ -46,11 +46,11 @@ except LookupError:
     nltk.download('punkt') # Re-download punkt if the specific file is not found.
 
 # Environment file paths
-GROQ_ENV_PATH = os.environ('GROQ_API_KEY')
+GROQ_ENV_PATH = os.environ['GROQ_API_KEY']
 
 # Extract keys from respective .env files
-SUPABASE_URL = os.environ("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.environ("SUPABASE_ANON_KEY")
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_ANON_KEY = os.environ["SUPABASE_ANON_KEY"]
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     print("Warning: Supabase environment variables not found in sb.env. Supabase features will not work.")
@@ -86,7 +86,7 @@ for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
 # --- Path Configuration ---
 UPLOAD_FOLDER = os.path.join("uploads")
 # Configure Flask session
-app.secret_key = os.environ("FLASK_SECRET_KEY")
+app.secret_key = os.environ["FLASK_SECRET_KEY"]
 app.config['SESSION_TYPE'] = 'filesystem'
 EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
 COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
