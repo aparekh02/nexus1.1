@@ -86,7 +86,7 @@ function App() {
   const [message, setMessage] = useState("Loading...");
 
   useEffect(() => {
-    fetch("/api")
+    fetch("https://nexus-backend-f2td.onrender.com/api")
       .then(res => res.json())
       .then(data => setMessage(data.message))
       .catch(() => setMessage("⚠️ Failed to fetch backend"));
