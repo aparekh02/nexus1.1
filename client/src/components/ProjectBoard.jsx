@@ -48,12 +48,12 @@ import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = ''
 axios.defaults.baseURL = API_BASE_URL
 
 // Axios instance pointed to backend Flask API
 const api = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: '',
 })
 
 const shapeTypes = [
