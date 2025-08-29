@@ -18,7 +18,7 @@ const ACCESS_LEVELS = [
 ]
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
 export default function CreateProject({ onBack, onProjectCreated }) {
