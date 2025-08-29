@@ -46,11 +46,17 @@ except LookupError:
     nltk.download('punkt') # Re-download punkt if the specific file is not found.
 
 # Environment file paths
-GROQ_ENV_PATH = os.environ['GROQ_API_KEY']
+GROQ_ENV_PATH = os.path.join( "groqapi.env")
+SB_ENV_PATH = os.path.join("sb.env")
+sb_config = dotenv_values(SB_ENV_PATH)
+
+# Load configs separately
+groq_config = dotenv_values(GROQ_ENV_PATH)
 
 # Extract keys from respective .env files
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_ANON_KEY = os.environ["SUPABASE_ANON_KEY"]
+GROQ_API_KEY = groq_config.get("GROQ_API_KEY")
+SUPABASE_URL = sb_config.get("SUPABASE_URL")
+SUPABASE_ANON_KEY = sb_config.get("SUPABASE_ANON_KEY")
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     print("Warning: Supabase environment variables not found in sb.env. Supabase features will not work.")
@@ -73,7 +79,7 @@ CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
 # --- Path Configuration ---
 UPLOAD_FOLDER = os.path.join("uploads")
 # Configure Flask session
-app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+app.secret_key = sb_config.get("FLASK_SECRET_KEY")
 app.config['SESSION_TYPE'] = 'filesystem'
 EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
 COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
