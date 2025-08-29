@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { X } from 'lucide-react'
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'http://localhost:5001'
+const API_BASE_URL = ''
 axios.defaults.baseURL = API_BASE_URL
 
 // FIXED: Configure axios to include credentials (cookies) with all requests
