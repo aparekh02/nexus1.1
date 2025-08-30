@@ -47,9 +47,9 @@ import { useAuth } from './AuthContext'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
-// Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
-axios.defaults.baseURL = API_BASE_URL
+// // Set the base URL for your Flask backend
+// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+// axios.defaults.baseURL = API_BASE_URL
 
 // Axios instance pointed to backend Flask API
 const api = axios.create({

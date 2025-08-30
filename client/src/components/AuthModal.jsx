@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { X } from 'lucide-react'
 
-// Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
-axios.defaults.baseURL = API_BASE_URL
+// // Set the base URL for your Flask backend
+// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
+// axios.defaults.baseURL = API_BASE_URL
 
 // FIXED: Configure axios to include credentials (cookies) with all requests
 // This ensures that session cookies are sent with every request to maintain login state

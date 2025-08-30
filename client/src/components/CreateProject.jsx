@@ -17,9 +17,9 @@ const ACCESS_LEVELS = [
   { value: 'edit', label: 'Collaborative (Coming Soon)', disabled: true }
 ]
 
-// Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
-axios.defaults.baseURL = API_BASE_URL
+// // Set the base URL for your Flask backend
+// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+// axios.defaults.baseURL = API_BASE_URL
 
 export default function CreateProject({ onBack, onProjectCreated }) {
   const { user } = useAuth()
