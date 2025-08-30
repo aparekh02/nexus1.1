@@ -8,9 +8,9 @@ import { useAuth } from './AuthContext'
 
 const PROJECTS_PER_PAGE = 10;
 
-// // Set the base URL for your Flask backend
-// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
-// axios.defaults.baseURL = API_BASE_URL
+// Set the base URL for your Flask backend
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+axios.defaults.baseURL = API_BASE_URL
 
 export default function ProjectFeed() {
   const { user } = useAuth()
@@ -194,7 +194,7 @@ export default function ProjectFeed() {
     setPosting(true)
     try {
       // Use the same exact structure as CreateProject.jsx
-      const response = await axios.post('/api/projects', {
+      const response = await axios.post('${API_BASE_URL}/api/projects', {
         title: projectName.trim(),
         description: description.trim(),
         subject: subject,

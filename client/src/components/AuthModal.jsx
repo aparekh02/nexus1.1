@@ -7,12 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { X } from 'lucide-react'
 
-// // Set the base URL for your Flask backend
-// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
-// axios.defaults.baseURL = API_BASE_URL
+// Set the base URL for your Flask backend (deployed, not localhost)
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
+axios.defaults.baseURL = API_BASE_URL
 
-// FIXED: Configure axios to include credentials (cookies) with all requests
-// This ensures that session cookies are sent with every request to maintain login state
+// Configure axios to include credentials (cookies) with all requests
 axios.defaults.withCredentials = true
 
 // Predefined class options (matching the Flask backend)
@@ -114,8 +113,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       onAuthSuccess(userData);
     }
     
-    // FIXED: Always refresh the page after successful authentication
-    // This ensures the homepage shows up properly after login
+    // Always refresh the page after successful authentication
     setTimeout(() => {
       window.location.reload();
     }, 100);
@@ -147,15 +145,14 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setError('')
 
     try {
-      const response = await axios.post('/api/login', {
+      // Use full URL for backend endpoint
+      const response = await axios.post(`${API_BASE_URL}/api/login`, {
         email: loginData.email,
         password: loginData.password
       }, {
         headers: {
           'Content-Type': 'application/json',
         },
-        // FIXED: Explicitly include credentials for this request
-        // This ensures the session cookie is sent and received properly
         withCredentials: true
       });
       
@@ -191,7 +188,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setValidationErrors({})
 
     try {
-      const response = await axios.post('/api/signup', {
+      // Use full URL for backend endpoint
+      const response = await axios.post(`${API_BASE_URL}/api/signup`, {
         name: signupData.name.trim(),
         email: signupData.email,
         password: signupData.password,
@@ -201,8 +199,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        // FIXED: Explicitly include credentials for this request
-        // This ensures the session cookie is sent and received properly
         withCredentials: true
       });
 
@@ -458,4 +454,3 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     </div>
   )
 }
-

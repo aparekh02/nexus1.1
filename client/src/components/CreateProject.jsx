@@ -17,9 +17,9 @@ const ACCESS_LEVELS = [
   { value: 'edit', label: 'Collaborative (Coming Soon)', disabled: true }
 ]
 
-// // Set the base URL for your Flask backend
-// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
-// axios.defaults.baseURL = API_BASE_URL
+// Set the base URL for your Flask backend
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+axios.defaults.baseURL = API_BASE_URL
 
 export default function CreateProject({ onBack, onProjectCreated }) {
   const { user } = useAuth()
@@ -61,7 +61,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
 
     try {
       // Send project data to Flask backend using new endpoint
-      const response = await axios.post('/api/projects', {
+      const response = await axios.post('${API_BASE_URL}/api/projects', {
         title: projectData.title.trim(),
         description: projectData.description.trim(),
         subject: projectData.subject,
@@ -134,7 +134,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
         formData.append('file', file)
         formData.append('project_id', createdProject?.id || 'temp')
         
-        const response = await axios.post('/api/files', formData, {
+        const response = await axios.post('${API_BASE_URL}/api/files', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
@@ -176,7 +176,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
     setError('')
 
     try {
-      const response = await axios.post('/api/ai-tools/execute', {
+      const response = await axios.post('${API_BASE_URL}/api/ai-tools/execute', {
         tool_name: toolName,
         input: projectData.description,
         project_id: createdProject?.id || 'temp',

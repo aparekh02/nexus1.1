@@ -47,9 +47,9 @@ import { useAuth } from './AuthContext'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
-// // Set the base URL for your Flask backend
-// const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
-// axios.defaults.baseURL = API_BASE_URL
+// Set the base URL for your Flask backend
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+axios.defaults.baseURL = API_BASE_URL
 
 // Axios instance pointed to backend Flask API
 const api = axios.create({
@@ -279,7 +279,7 @@ export default function ProjectBoard({ project, onBack }) {
         timestamp: new Date().toISOString()
       }
       
-      const response = await api.post('/api/project-state/save', projectState, {
+      const response = await api.post('${API_BASE_URL}/api/project-state/save', projectState, {
         withCredentials: true
       })
       
@@ -538,7 +538,7 @@ export default function ProjectBoard({ project, onBack }) {
         formData.append('file', file)
         formData.append('project_id', project.id)
         
-        const response = await axios.post('/api/files', formData, {
+        const response = await axios.post('${API_BASE_URL}/api/files', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
@@ -572,7 +572,7 @@ export default function ProjectBoard({ project, onBack }) {
       
       try {
         setLoading(true) // Show loading state
-        const res = await api.post('/import-file', form, { withCredentials: true })
+        const res = await api.post('${API_BASE_URL}/import-file', form, { withCredentials: true })
         console.log('File uploaded and text extracted:', res.data)
         
         // Check if the response has the expected structure
@@ -660,7 +660,7 @@ export default function ProjectBoard({ project, onBack }) {
     setError('')
 
     try {
-      const response = await axios.post('/api/ai-tools/execute', {
+      const response = await axios.post('${API_BASE_URL}/api/ai-tools/execute', {
         tool_name: toolName,
         input: selectedNode?.data?.description || project.description,
         project_id: project.id,
@@ -918,7 +918,7 @@ export default function ProjectBoard({ project, onBack }) {
         path: f.path,
         compressed_path: f.compressed_path
       })) 
-      const res = await api.post('/ai-arrange', { files })
+      const res = await api.post('${API_BASE_URL}/ai-arrange', { files })
       
       const newNodes = validateNodes(res.data.nodes)
       setNodes(newNodes)
@@ -980,7 +980,7 @@ export default function ProjectBoard({ project, onBack }) {
 
     setLoading(true)
     try {
-      const res = await api.post('/generate-test', { 
+      const res = await api.post('${API_BASE_URL}/generate-test', { 
         config: testGenerationConfig, 
         sourceFilePaths: sourceFilePaths,
         compressedFilePaths: compressedFilePaths
@@ -1067,7 +1067,7 @@ export default function ProjectBoard({ project, onBack }) {
       const sourceFilePaths = importFiles.map(f => f.path)
       const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
-      const notesRes = await api.post('/generate-notes', { 
+      const notesRes = await api.post('${API_BASE_URL}/generate-notes', { 
         topic: topic, 
         existingContent: existingContent, 
         sourceFilePaths: sourceFilePaths, 
@@ -1115,7 +1115,7 @@ export default function ProjectBoard({ project, onBack }) {
       const sourceFilePaths = importFiles.map(f => f.path)
       const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
-      const res = await api.post('/generate-study-guide', { 
+      const res = await api.post('${API_BASE_URL}/generate-study-guide', { 
         topics: topics, 
         sourceFilePaths: sourceFilePaths,
         compressedFilePaths: compressedFilePaths
