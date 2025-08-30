@@ -46,14 +46,14 @@ except LookupError:
     nltk.download('punkt') # Re-download punkt if the specific file is not found.
 
 # Environment file paths
-GROQ_ENV_PATH = os.path.join( "groqapi.env")
+GROQ_ENV_PATH = os.path.join("groqapi.env")
 SB_ENV_PATH = os.path.join("sb.env")
+
+# Load environment variables from the specified .env files
+groq_config = dotenv_values(GROQ_ENV_PATH)
 sb_config = dotenv_values(SB_ENV_PATH)
 
-# Load configs separately
-groq_config = dotenv_values(GROQ_ENV_PATH)
-
-# Extract keys from respective .env files
+# Retrieve API keys and other secrets from the loaded configs
 GROQ_API_KEY = groq_config.get("GROQ_API_KEY")
 SUPABASE_URL = sb_config.get("SUPABASE_URL")
 SUPABASE_ANON_KEY = sb_config.get("SUPABASE_ANON_KEY")
@@ -89,13 +89,13 @@ for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-# --- Path Configuration ---
+"""# --- Path Configuration ---
 UPLOAD_FOLDER = os.path.join("uploads")
 # Configure Flask session
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 app.config['SESSION_TYPE'] = 'filesystem'
 EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
-COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
+COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")"""
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
@@ -1497,33 +1497,56 @@ def import_file():
 
 # ==================== USER AUTHENTICATION ROUTES ====================
 
-@app.route('/signup', methods=['POST'])
+@app.route('/api/signup', methods=['POST'])
 def signup():
     """
-    Create a new user account and store in Supabase
+    Create a new user account and store in Supabase.
+    Returns JSON with 'success' and 'message' fields for frontend compatibility.
     """
-    data = request.json
-    email = data.get('email', '').lower()
-    name = data.get('name', '')
-    school = data.get('school', '')
+    # Accept both JSON and form data for flexibility
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
+
+    email = data.get('email', '').strip().lower()
+    name = data.get('name', '').strip()
+    school = data.get('school', '').strip()
     password = data.get('password', '')
     selected_classes = data.get('classes', [])
-    
+
+    # Ensure selected_classes is a list (can be sent as comma-separated string from frontend)
+    if isinstance(selected_classes, str):
+        selected_classes = [c.strip() for c in selected_classes.split(',') if c.strip()]
+
+    # Frontend expects 'success' and 'message' fields in all responses
     if not all([email, name, school, password]):
-        return jsonify({"error": "Missing required fields"}), 400
-    
+        return jsonify({
+            "success": False,
+            "message": "Missing required fields"
+        }), 400
+
     if not selected_classes or len(selected_classes) < 1:
-        return jsonify({"error": "Please select at least one class"}), 400
-    
+        return jsonify({
+            "success": False,
+            "message": "Please select at least one class"
+        }), 400
+
     # Check if user already exists
     try:
         existing_user = supabase.table('users').select('email').eq('email', email).execute()
         if existing_user.data:
-            return jsonify({"error": "Email already registered"}), 400
+            return jsonify({
+                "success": False,
+                "message": "Email already registered"
+            }), 400
     except Exception as e:
         print(f"Error checking existing user: {e}")
-        return jsonify({"error": "Database error during signup"}), 500
-    
+        return jsonify({
+            "success": False,
+            "message": "Database error during signup"
+        }), 500
+
     # Create new user
     try:
         user_data = {
@@ -1534,78 +1557,108 @@ def signup():
             "classes": ','.join(selected_classes),
             "created_at": datetime.now().isoformat()
         }
-        
+
         response = supabase.table('users').insert(user_data).execute()
-        
+
         if response.data:
             user = response.data[0]
+            # Set session cookie for authentication (for withCredentials)
+            session["user_email"] = user["email"]
             return jsonify({
                 "success": True,
                 "message": "Account created successfully!",
                 "user": {
-                    "id": user['id'],
-                    "name": user['name'],
-                    "email": user['email'],
-                    "school": user['school'],
-                    "classes": user['classes']
+                    "id": user.get('id'),
+                    "name": user.get('name'),
+                    "email": user.get('email'),
+                    "school": user.get('school'),
+                    "classes": user.get('classes')
                 }
             }), 201
         else:
-            return jsonify({"error": "Failed to create account"}), 500
-            
+            return jsonify({
+                "success": False,
+                "message": "Failed to create account"
+            }), 500
+
     except Exception as e:
         print(f"Error creating user: {e}")
-        return jsonify({"error": "Database error during account creation"}), 500
+        return jsonify({
+            "success": False,
+            "message": "Database error during account creation"
+        }), 500
 
-@app.route('/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     """
-    Authenticate user and return user data
+    Authenticate user and return user data (frontend-compatible)
     """
-    data = request.json
-    email = data.get("email", "").lower()
-    password = data.get("password", "")
-    
-    if not email or not password:
-        return jsonify({"error": "Email and password required"}), 400
-    
-    try:
-        # Get user from Supabase
-        response = supabase.table("users").select("*").eq("email", email).execute()
-        
-        if not response.data:
-            return jsonify({"error": "Invalid email or password"}), 401
-        
-        user = response.data[0]
-        
-        # Check password
-        if not check_password_hash(user["password_hash"], password):
-            return jsonify({"error": "Invalid email or password"}), 401
-        
-        # Update last login
-        supabase.table("users").update({
-            "last_login": datetime.now().isoformat()
-        }).eq("id", user["id"]).execute()
+    # Accept both JSON and form data for flexibility
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
 
-        session["user_email"] = email
-        user_email = session.get("user_email")
-        print(f"User {user_email} logged in successfully and stored in session")
-        
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+
+    # Frontend expects 'success' and 'message' fields in all responses
+    if not email or not password:
+        return jsonify({
+            "success": False,
+            "message": "Email and password required"
+        }), 400
+
+    try:
+        # Query user by email
+        response = supabase.table("users").select("*").eq("email", email).execute()
+        if not response.data or len(response.data) == 0:
+            return jsonify({
+                "success": False,
+                "message": "Invalid email or password"
+            }), 401
+
+        user = response.data[0]
+
+        # Check password
+        if not check_password_hash(user.get("password_hash", ""), password):
+            return jsonify({
+                "success": False,
+                "message": "Invalid email or password"
+            }), 401
+
+        # Update last login timestamp
+        try:
+            supabase.table("users").update({
+                "last_login": datetime.now().isoformat()
+            }).eq("id", user["id"]).execute()
+        except Exception as update_err:
+            print(f"Warning: Could not update last_login: {update_err}")
+
+        # Set session cookie for authentication (for withCredentials)
+        session["user_email"] = user["email"]
+
+        # Prepare user object for frontend (no password hash)
+        user_obj = {
+            "id": user.get("id"),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "school": user.get("school"),
+            "classes": user.get("classes", "")
+        }
+
         return jsonify({
             "success": True,
             "message": "Logged in successfully",
-            "user": {
-                "id": user["id"],
-                "name": user["name"],
-                "email": user["email"],
-                "school": user["school"],
-                "classes": user["classes"]
-            }
+            "user": user_obj
         }), 200
-        
+
     except Exception as e:
         print(f"Error during login: {e}")
-        return jsonify({"error": "Database error during login"}), 500
+        return jsonify({
+            "success": False,
+            "message": "Database error during login"
+        }), 500
 
 
 
