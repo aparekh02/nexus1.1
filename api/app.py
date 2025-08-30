@@ -985,7 +985,7 @@ def delete_project(project_id):
 
 # ==================== AI TOOLS ROUTES ====================
 
-@app.route("/api/ai-tools/execute", methods=["POST"])
+@app.route('/api/ai-tools/execute', methods=["POST"])
 def execute_ai_tool():
     user_email = get_authenticated_user()
     if not user_email:
@@ -3191,7 +3191,7 @@ def add_comment(post_id):
         print(f"Error adding comment: {e}")
         return jsonify({"error": "Failed to add comment"}), 500
 
-@app.route("/api/posts/<int:post_id>/comments", methods=["GET"])
+@app.route('/api/posts/<int:post_id>/comments', methods=["GET"])
 def get_comments(post_id):
     try:
         response = supabase.table("post_comments").select("*, users(name)").eq("post_id", post_id).order("created_at", desc=True).execute()
