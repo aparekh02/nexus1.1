@@ -48,7 +48,7 @@ function AppContent() {
                 <img src={logo} alt="Nexus Logo" className="h-32 w-auto flex-shrink-0" />
               </div>
               <p className="text-xl text-gray-600 mb-8">
-                A Community for Studying & Connectiung with Students
+                A Community for Studying & Connecting with Students
               </p>
             </div>
             
