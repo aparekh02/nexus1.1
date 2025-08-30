@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext'
 const PROJECTS_PER_PAGE = 10;
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
 axios.defaults.baseURL = API_BASE_URL
 
 export default function ProjectFeed() {
