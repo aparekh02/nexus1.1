@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { X } from 'lucide-react'
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
 // FIXED: Configure axios to include credentials (cookies) with all requests
@@ -147,7 +147,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setError('')
 
     try {
-      const response = await axios.post('/login', {
+      const response = await axios.post('/api/login', {
         email: loginData.email,
         password: loginData.password
       }, {
@@ -191,7 +191,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setValidationErrors({})
 
     try {
-      const response = await axios.post('/signup', {
+      const response = await axios.post('/api/signup', {
         name: signupData.name.trim(),
         email: signupData.email,
         password: signupData.password,
