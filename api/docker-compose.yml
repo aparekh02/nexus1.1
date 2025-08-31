@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass kAZnGAR82k6ZX3YOoon70sxmw3BMN7ss
+    restart: unless-stopped
+    environment:
+      - REDIS_PASSWORD=kAZnGAR82k6ZX3YOoon70sxmw3BMN7ss
+    # Optionally, add resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 23M
+        reservations:
+          memory: 23M
+
+volumes:
+  redis_data:

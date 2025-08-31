@@ -3,6 +3,7 @@ import functools
 import io
 import json
 import os
+from pickle import FALSE
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -15,10 +16,12 @@ import pytesseract
 from dotenv import dotenv_values
 from flask import Flask, jsonify, make_response, request, session
 from flask_cors import CORS
+from flask_session import Session
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import sent_tokenize, word_tokenize
 from PIL import Image
+import redis
 from supabase import Client, create_client
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -93,8 +96,26 @@ COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
 
 # Configure Flask session for persistence
 app.secret_key = sb_config.get("FLASK_SECRET_KEY")
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=360)  # Session ends when browser/tab closes
+
+# Redis configuration
+REDIS_HOST = sb_config.get("REDIS_HOST")
+REDIS_PORT = sb_config.get("REDIS_PORT") #int
+REDIS_PASSWORD = sb_config.get("REDIS_PASSWORD")
+REDIS_DB = sb_config.get("REDIS_DB") #int
+
+# Session configuration
+app.config['SESSION_TYPE'] = 'redis'
+app.config['SESSION_REDIS'] = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    password=REDIS_PASSWORD,
+    db=REDIS_DB,
+    decode_responses=True
+)
+app.config['PERMANENT_SESSION_LIFETIME'] = FALSE
+
+# Initialize Flask-Session
+Session(app)
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
@@ -1638,7 +1659,6 @@ def login():
             print(f"Warning: Could not update last_login: {update_err}")
 
         # Set session cookie for authentication (for withCredentials)
-        session.permanent = False
         session["user_email"] = user["email"]
 
         # Prepare user object for frontend (no password hash)
