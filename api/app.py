@@ -1,26 +1,27 @@
-from flask import Flask, request, jsonify, session, make_response
-from flask_cors import CORS
-import os
-from dotenv import dotenv_values
-from supabase import create_client, Client
 import base64
-from datetime import datetime
-import uuid
-from werkzeug.security import generate_password_hash, check_password_hash
-import json
-import fitz # PyMuPDF
-from PIL import Image
-import pytesseract
-import io
-import time
 import functools
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize, sent_tokenize
+import io
+import json
+import os
+import time
+import uuid
+from datetime import datetime, timedelta
+
+import fitz  # PyMuPDF
 
 # Download required NLTK data
 import nltk
+import pytesseract
+from dotenv import dotenv_values
+from flask import Flask, jsonify, make_response, request, session
+from flask_cors import CORS
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import sent_tokenize, word_tokenize
+from PIL import Image
+from supabase import Client, create_client
+from werkzeug.security import check_password_hash, generate_password_hash
+
 nltk.download('punkt_tab')
 
 try:
@@ -87,24 +88,19 @@ CORS(app,
 
 # --- Path Configuration ---
 UPLOAD_FOLDER = os.path.join("uploads")
-# Configure Flask session
-app.secret_key = sb_config.get("FLASK_SECRET_KEY")
-app.config['SESSION_TYPE'] = 'filesystem'
 EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
 COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
+
+# Configure Flask session for persistence
+app.secret_key = sb_config.get("FLASK_SECRET_KEY")
+app.config['SESSION_TYPE'] = 'filesystem'
+
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Sessions last 7 days by default
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
-
-"""# --- Path Configuration ---
-UPLOAD_FOLDER = os.path.join("uploads")
-# Configure Flask session
-app.secret_key = os.environ["FLASK_SECRET_KEY"]
-app.config['SESSION_TYPE'] = 'filesystem'
-EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
-COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")"""
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
