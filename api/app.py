@@ -74,7 +74,16 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 from groq import Groq
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=["https://nexus-frontend-y7uh.onrender.com/"])
+
+# --- CORS Configuration for Frontend-to-Backend Connection ---
+# The key change: use CORS_ALLOW_CREDENTIALS (not CORS_ALLOWED_CREDENTIALS)
+# and ensure credentials are allowed for the frontend origin.
+CORS(app,
+     origins=["https://nexus-frontend-y7uh.onrender.com"],
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 # --- Path Configuration ---
 UPLOAD_FOLDER = os.path.join("uploads")
@@ -3156,7 +3165,7 @@ def create_post():
 def handle_preflight():
     if request.method == "OPTIONS":
         res = make_response()
-        res.headers.add("Access-Control-Allow-Origin", "https://nexus-frontend-y7uh.onrender.com/" )
+        res.headers.add("Access-Control-Allow-Origin", "https://nexus-frontend-y7uh.onrender.com")
         res.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
         res.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
         res.headers.add("Access-Control-Allow-Credentials", "true")
