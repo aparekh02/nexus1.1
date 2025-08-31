@@ -48,7 +48,7 @@ import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
 // Axios instance pointed to backend Flask API
@@ -305,7 +305,7 @@ export default function ProjectBoard({ project, onBack }) {
     if (!project?.id) return
     
     try {
-      const response = await api.get(`/api/project-state/load/${project.id}`, {
+      const response = await api.get(`${API_BASE_URL}/api/project-state/load/${project.id}`, {
         withCredentials: true
       })
       
@@ -518,7 +518,7 @@ export default function ProjectBoard({ project, onBack }) {
 
   const loadProjectFiles = async () => {
     try {
-      const response = await axios.get(`/api/files?project_id=${project.id}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/files?project_id=${project.id}`, {
         withCredentials: true
       })
       if (response.data.success) {
@@ -634,7 +634,7 @@ export default function ProjectBoard({ project, onBack }) {
       const fileToDelete = uploadedFiles.find(f => f.id === fileId)
       const fileName = fileToDelete?.filename || 'Unknown file'
       
-      const response = await axios.delete(`/api/files/${fileId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/files/${fileId}`, {
         withCredentials: true
       })
 

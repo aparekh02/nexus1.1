@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext'
 const PROJECTS_PER_PAGE = 10;
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
 export default function ProjectFeed() {
@@ -101,7 +101,7 @@ export default function ProjectFeed() {
       return;
     }
     try {
-      const response = await axios.post(`/api/posts/${postId}/like`, {
+      const response = await axios.post(`${API_BASE_URL}/api/posts/${postId}/like`, {
         user_id: user.email // Assuming user.email is the user_id for likes
       }, {
         headers: {
@@ -139,7 +139,7 @@ export default function ProjectFeed() {
 
   const fetchComments = async (postId) => {
     try {
-      const response = await axios.get(`/api/posts/${postId}/comments`);
+      const response = await axios.get(`${API_BASE_URL}/api/posts/${postId}/comments`);
       if (response.data.success) {
         setComments(response.data.comments);
       } else {
@@ -163,7 +163,7 @@ export default function ProjectFeed() {
     }
 
     try {
-      const response = await axios.post(`/api/posts/${postId}/comments`, {
+      const response = await axios.post(`${API_BASE_URL}/api/posts/${postId}/comments`, {
         comment_text: newCommentText.trim()
       }, {
         headers: {

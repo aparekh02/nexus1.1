@@ -18,7 +18,7 @@ const ACCESS_LEVELS = [
 ]
 
 // Set the base URL for your Flask backend
-const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com/api'
+const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
 export default function CreateProject({ onBack, onProjectCreated }) {
@@ -153,7 +153,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
 
   const handleDeleteFile = async (fileId) => {
     try {
-      const response = await axios.delete(`/api/files/${fileId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/files/${fileId}`, {
         withCredentials: true
       })
 
