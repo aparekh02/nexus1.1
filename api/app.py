@@ -94,8 +94,7 @@ COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
 # Configure Flask session for persistence
 app.secret_key = sb_config.get("FLASK_SECRET_KEY")
 app.config['SESSION_TYPE'] = 'filesystem'
-
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Sessions last 7 days by default
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=360)  # Session ends when browser/tab closes
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
@@ -321,8 +320,6 @@ def _nltk_compress_and_filter(structured_data):
 
     return final_concise_text
 
-# IMPROVED: AI-driven text compression/structured extraction for a single chunk
-@retry_with_backoff
 def _extract_key_study_elements_from_chunk(text_chunk):
     if not text_chunk.strip():
         return {
@@ -1641,6 +1638,7 @@ def login():
             print(f"Warning: Could not update last_login: {update_err}")
 
         # Set session cookie for authentication (for withCredentials)
+        session.permanent = False
         session["user_email"] = user["email"]
 
         # Prepare user object for frontend (no password hash)
