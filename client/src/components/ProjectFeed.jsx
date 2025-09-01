@@ -195,7 +195,7 @@ export default function ProjectFeed() {
     try {
       // Use the same exact structure as CreateProject.jsx
       const token = localStorage.getItem('jwt_token')
-      const response = await axios.post('${API_BASE_URL}/api/projects', {
+      const response = await axios.post('/api/projects', {
         title: projectName.trim(),
         description: description.trim(),
         subject: subject,

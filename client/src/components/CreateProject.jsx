@@ -62,7 +62,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
     try {
       // Send project data to Flask backend using new endpoint
       const token = localStorage.getItem('jwt_token')
-      const response = await axios.post('${API_BASE_URL}/api/projects', {
+      const response = await axios.post('/api/projects', {
         title: projectData.title.trim(),
         description: projectData.description.trim(),
         subject: projectData.subject,
@@ -135,7 +135,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
         formData.append('project_id', createdProject?.id || 'temp')
         
         const token = localStorage.getItem('jwt_token')
-        const response = await axios.post('${API_BASE_URL}/api/files', formData, {
+        const response = await axios.post('/api/files', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`
@@ -181,7 +181,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
 
     try {
       const token = localStorage.getItem('jwt_token')
-      const response = await axios.post('${API_BASE_URL}/api/ai-tools/execute', {
+      const response = await axios.post('/api/ai-tools/execute', {
         tool_name: toolName,
         input: projectData.description,
         project_id: createdProject?.id || 'temp',

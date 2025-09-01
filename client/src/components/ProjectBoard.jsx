@@ -53,7 +53,7 @@ axios.defaults.baseURL = API_BASE_URL
 
 // Axios instance pointed to backend Flask API
 const api = axios.create({
-  baseURL: '',
+  baseURL: API_BASE_URL,
 })
 
 const shapeTypes = [
@@ -279,9 +279,7 @@ export default function ProjectBoard({ project, onBack }) {
         timestamp: new Date().toISOString()
       }
       
-      const response = await api.post('${API_BASE_URL}/api/project-state/save', projectState, {
-        withCredentials: true
-      })
+      const response = await api.post('/api/project-state/save', projectState, {})
       
       if (response.data.success) {
         setSyncStatus('success')
@@ -305,9 +303,7 @@ export default function ProjectBoard({ project, onBack }) {
     if (!project?.id) return
     
     try {
-      const response = await api.get(`${API_BASE_URL}/api/project-state/load/${project.id}`, {
-        withCredentials: true
-      })
+      const response = await api.get(`/api/project-state/load/${project.id}`, {})
       
       if (response.data.success && response.data.projectState) {
         const state = response.data.projectState
@@ -519,7 +515,7 @@ export default function ProjectBoard({ project, onBack }) {
   const loadProjectFiles = async () => {
     try {
       const token = localStorage.getItem('jwt_token')
-      const response = await axios.get(`${API_BASE_URL}/api/files?project_id=${project.id}`, {
+      const response = await axios.get(`/api/files?project_id=${project.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -542,7 +538,7 @@ export default function ProjectBoard({ project, onBack }) {
         formData.append('project_id', project.id)
         
         const token = localStorage.getItem('jwt_token')
-        const response = await axios.post('${API_BASE_URL}/api/files', formData, {
+        const response = await axios.post('/api/files', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`
@@ -577,7 +573,7 @@ export default function ProjectBoard({ project, onBack }) {
       try {
         setLoading(true) // Show loading state
         const token = localStorage.getItem('jwt_token')
-        const res = await api.post('${API_BASE_URL}/import-file', form, { 
+        const res = await api.post('/import-file', form, { 
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -644,7 +640,7 @@ export default function ProjectBoard({ project, onBack }) {
       const fileName = fileToDelete?.filename || 'Unknown file'
       
               const token = localStorage.getItem('jwt_token')
-        const response = await axios.delete(`${API_BASE_URL}/api/files/${fileId}`, {
+        const response = await axios.delete(`/api/files/${fileId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -673,7 +669,7 @@ export default function ProjectBoard({ project, onBack }) {
 
     try {
       const token = localStorage.getItem('jwt_token')
-      const response = await axios.post('${API_BASE_URL}/api/ai-tools/execute', {
+      const response = await axios.post('/api/ai-tools/execute', {
         tool_name: toolName,
         input: selectedNode?.data?.description || project.description,
         project_id: project.id,
@@ -934,7 +930,7 @@ export default function ProjectBoard({ project, onBack }) {
         compressed_path: f.compressed_path
       })) 
       const token = localStorage.getItem('jwt_token')
-      const res = await api.post('${API_BASE_URL}/ai-arrange', { files }, {
+      const res = await api.post('/ai-arrange', { files }, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1001,7 +997,7 @@ export default function ProjectBoard({ project, onBack }) {
     setLoading(true)
     try {
       const token = localStorage.getItem('jwt_token')
-      const res = await api.post('${API_BASE_URL}/generate-test', { 
+      const res = await api.post('/generate-test', { 
         config: testGenerationConfig, 
         sourceFilePaths: sourceFilePaths,
         compressedFilePaths: compressedFilePaths
@@ -1093,7 +1089,7 @@ export default function ProjectBoard({ project, onBack }) {
       const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
       const token = localStorage.getItem('jwt_token')
-      const notesRes = await api.post('${API_BASE_URL}/generate-notes', { 
+      const notesRes = await api.post('/generate-notes', { 
         topic: topic, 
         existingContent: existingContent, 
         sourceFilePaths: sourceFilePaths, 
@@ -1146,7 +1142,7 @@ export default function ProjectBoard({ project, onBack }) {
       const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
       const token = localStorage.getItem('jwt_token')
-      const res = await api.post('${API_BASE_URL}/generate-study-guide', { 
+      const res = await api.post('/generate-study-guide', { 
         topics: topics, 
         sourceFilePaths: sourceFilePaths,
         compressedFilePaths: compressedFilePaths
