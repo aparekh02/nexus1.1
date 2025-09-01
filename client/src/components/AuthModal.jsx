@@ -14,6 +14,12 @@ axios.defaults.baseURL = API_BASE_URL
 // Configure axios to use JWT tokens instead of cookies
 axios.defaults.withCredentials = false
 
+// Load any saved JWT token on startup and set default Authorization header
+const savedToken = typeof window !== 'undefined' ? localStorage.getItem('jwt_token') : null
+if (savedToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`
+}
+
 // Predefined class options (matching the Flask backend)
 const CLASSES = ["Math", "Science", "History", "Art", "Computer Science", "English"]
 
@@ -162,7 +168,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       
       // Handle JSON response from Flask backend
       if (response.data.success) {
-        handleAuthSuccess(response.data.user, response.data.message || 'Login successful');
+        // Pass token along with user to be stored
+        const fullUser = { ...response.data.user, token: response.data.token }
+        handleAuthSuccess(fullUser, response.data.message || 'Login successful');
         // Reset form on successful login
         setLoginData({ email: '', password: '' })
       } else {
@@ -209,7 +217,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       if (response.data.success) {
         // Show success message for signup
         alert(response.data.message || 'Account created successfully!');
-        handleAuthSuccess(response.data.user, response.data.message || 'Account created successfully');
+        const fullUser = { ...response.data.user, token: response.data.token }
+        handleAuthSuccess(fullUser, response.data.message || 'Account created successfully');
         // Reset form on successful signup
         setSignupData({
           name: '',
