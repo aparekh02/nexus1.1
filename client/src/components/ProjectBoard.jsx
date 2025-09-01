@@ -584,13 +584,19 @@ export default function ProjectBoard({ project, onBack }) {
         if (res.data && res.data.success) {
           newFiles.push({ 
             ...meta, 
-            path: res.data.path, 
-            compressed_path: res.data.compressed_path,
-            file_id: res.data.file_id
+            database_record_id: res.data.database_record_id,
+            file_id: res.data.file_id,
+            storage_type: res.data.storage_type || 'database',
+            extracted_text_length: res.data.extracted_text_length,
+            compressed_text_length: res.data.compressed_text_length,
+            structured_items: res.data.structured_items
           })
           
-          // Log successful file import
-          logChange(project.id, 'file_imported', `Imported and processed file: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`)
+          // Log successful file import with processing details
+          const processingInfo = res.data.structured_items ? 
+            `(${res.data.structured_items.terms} terms, ${res.data.structured_items.definitions} definitions, ${res.data.structured_items.examples} examples)` : 
+            ''
+          logChange(project.id, 'file_imported', `Imported and processed file: ${f.name} (${(f.size / 1024).toFixed(1)} KB) ${processingInfo}`)
         } else {
           // Handle case where success is false or missing
           const errorMsg = res.data?.error || `Upload failed for ${f.name}: Invalid response format`
@@ -923,11 +929,12 @@ export default function ProjectBoard({ project, onBack }) {
     }
     setAiLoading(true)
     try {
+      // Since files are now stored in database, just send file metadata
       const files = importFiles.map(f => ({ 
         fileName: f.file.name, 
         type: f.type, 
-        path: f.path,
-        compressed_path: f.compressed_path
+        database_record_id: f.database_record_id,
+        storage_type: f.storage_type || 'database'
       })) 
       const token = localStorage.getItem('jwt_token')
       const res = await api.post('/ai-arrange', { files }, {
@@ -942,7 +949,7 @@ export default function ProjectBoard({ project, onBack }) {
       setSelectedNode(null)
       
       // Log AI arrangement
-      logChange(project.id, 'ai_arrange_completed', `AI arranged ${res.data.nodes.length} nodes and ${res.data.edges.length} connections from ${files.length} files`)
+      logChange(project.id, 'ai_arrange_completed', `AI arranged ${res.data.nodes.length} nodes and ${res.data.edges.length} connections from ${files.length} database-stored files`)
       
       alert("AI arrangement complete!")
     } catch (err) {
@@ -973,21 +980,7 @@ export default function ProjectBoard({ project, onBack }) {
     const availablePracticeSources = importFiles.filter(f => f.type === 'practice')
     const availableNotesSources = importFiles.filter(f => f.type === 'notes')
 
-    let sourceFilePaths = []
-    let compressedFilePaths = []
-
-    if (availableTestSources.length > 0) {
-      sourceFilePaths = availableTestSources.map(f => f.path)
-      compressedFilePaths = availableTestSources.map(f => f.compressed_path)
-    } else if (availablePracticeSources.length > 0) {
-      sourceFilePaths = availablePracticeSources.map(f => f.path)
-      compressedFilePaths = availablePracticeSources.map(f => f.compressed_path)
-    }
-    else if (availableNotesSources.length > 0) {
-      sourceFilePaths = availableNotesSources.map(f => f.path)
-      compressedFilePaths = availableNotesSources.map(f => f.compressed_path)
-    }
-    else {
+    if (availableTestSources.length === 0 && availablePracticeSources.length === 0 && availableNotesSources.length === 0) {
       console.warn("No suitable files (tests, practice, or notes) found to generate a test.")
       alert("Please upload 'test', 'practice', or 'notes' files to generate a test.")
       handleCloseTestModal()
@@ -997,10 +990,9 @@ export default function ProjectBoard({ project, onBack }) {
     setLoading(true)
     try {
       const token = localStorage.getItem('jwt_token')
+      // The backend now gets data from database based on JWT user, no need to pass file paths
       const res = await api.post('/generate-test', { 
-        config: testGenerationConfig, 
-        sourceFilePaths: sourceFilePaths,
-        compressedFilePaths: compressedFilePaths
+        config: testGenerationConfig
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1035,7 +1027,8 @@ export default function ProjectBoard({ project, onBack }) {
       setTestModalOpen(false)
       
       // Log test generation with position
-      logChange(project.id, 'test_generated', `Generated ${testGenerationConfig.type.toUpperCase()} test "${testGenerationConfig.name}" with ${testGenerationConfig.questionCount} questions at position (${Math.round(testPosition.x)}, ${Math.round(testPosition.y)})`)
+      const availableFiles = availableTestSources.length + availablePracticeSources.length + availableNotesSources.length
+      logChange(project.id, 'test_generated', `Generated ${testGenerationConfig.type.toUpperCase()} test "${testGenerationConfig.name}" with ${testGenerationConfig.questionCount} questions using ${availableFiles} database-stored files at position (${Math.round(testPosition.x)}, ${Math.round(testPosition.y)})`)
       
       alert("Test Generated! Check the new node on the canvas.")
     } catch (err) {
@@ -1085,15 +1078,12 @@ export default function ProjectBoard({ project, onBack }) {
     try {
       const topic = selectedNode.data.label
       const existingContent = selectedNode.data.description || ''
-      const sourceFilePaths = importFiles.map(f => f.path)
-      const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
       const token = localStorage.getItem('jwt_token')
+      // Backend now gets user's processed files from database based on JWT
       const notesRes = await api.post('/generate-notes', { 
         topic: topic, 
-        existingContent: existingContent, 
-        sourceFilePaths: sourceFilePaths, 
-        compressedFilePaths: compressedFilePaths 
+        existingContent: existingContent
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1117,7 +1107,7 @@ export default function ProjectBoard({ project, onBack }) {
       })
       
       // Log notes development
-      logChange(project.id, 'notes_developed', `Developed notes for node "${topic}" using ${sourceFilePaths.length} source files`)
+      logChange(project.id, 'notes_developed', `Developed notes for node "${topic}" using database-stored processed files`)
       
       alert("Notes developed successfully!")
     } catch (err) {
@@ -1138,14 +1128,11 @@ export default function ProjectBoard({ project, onBack }) {
     setStudyGuideLoading(true)
     try {
       const topics = nodes.map(n => n.data.label).filter(Boolean)
-      const sourceFilePaths = importFiles.map(f => f.path)
-      const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
       const token = localStorage.getItem('jwt_token')
+      // Backend now gets user's processed files from database based on JWT
       const res = await api.post('/generate-study-guide', { 
-        topics: topics, 
-        sourceFilePaths: sourceFilePaths,
-        compressedFilePaths: compressedFilePaths
+        topics: topics
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1158,7 +1145,7 @@ export default function ProjectBoard({ project, onBack }) {
       setSelectedNode(null)
       
       // Log study guide generation
-      logChange(project.id, 'study_guide_generated', `Generated study guide with ${res.data.nodes.length} nodes and ${res.data.edges.length} connections from ${topics.length} topics and ${sourceFilePaths.length} files`)
+      logChange(project.id, 'study_guide_generated', `Generated study guide with ${res.data.nodes.length} nodes and ${res.data.edges.length} connections from ${topics.length} topics using database-stored files`)
       
       alert("Study Guide Generated! Check the new layout on the canvas.")
     } catch (err) {
@@ -1179,15 +1166,12 @@ export default function ProjectBoard({ project, onBack }) {
     setAutofillLoading(true)
     try {
       const topic = selectedNode.data.label
-      const sourceFilePaths = importFiles.map(f => f.path)
-      const compressedFilePaths = importFiles.map(f => f.compressed_path)
 
       const token = localStorage.getItem('jwt_token')
+      // Backend now gets user's processed files from database based on JWT
       const res = await api.post("/autofill-info", { 
         topic: topic, 
-        existingContent: selectedNode.data.description || '',
-        sourceFilePaths: sourceFilePaths,
-        compressed_file_paths: compressedFilePaths
+        existingContent: selectedNode.data.description || ''
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1209,7 +1193,7 @@ export default function ProjectBoard({ project, onBack }) {
       })
       
       // Log autofill action
-      logChange(project.id, 'ai_autofill_completed', `Generated AI summary for node "${topic}" using ${sourceFilePaths.length} source files`)
+      logChange(project.id, 'ai_autofill_completed', `Generated AI summary for node "${topic}" using database-stored processed files`)
       
       alert("AI Summary generated!")
     } catch (err) {

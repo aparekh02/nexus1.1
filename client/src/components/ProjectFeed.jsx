@@ -251,6 +251,8 @@ export default function ProjectFeed() {
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4">
+      {/* Feed Heading */}
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">My Feed</h2>
       {/* Post Creation UI */}
       <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
         <div className="flex items-start space-x-3">

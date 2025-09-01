@@ -1378,9 +1378,9 @@ def _process_and_compress_text(raw_text_content, file_id):
 @app.route('/import-file', methods=['POST'])
 def import_file():
     """
-    Handles file uploads, extracts text (PDF/OCR), saves it,
-    and triggers AI-driven text compression.
-    Returns the path to the extracted text file AND the compressed JSON file.
+    Handles file uploads, extracts text (PDF/OCR), processes and compresses it,
+    and stores everything directly in the database (no external files).
+    Returns the database record ID and processing results.
     """
     try:
         if 'file' not in request.files:
@@ -1400,35 +1400,33 @@ def import_file():
         if not user_email:
             return jsonify({"error": "Unauthorized"}), 401
 
-        # Save original file with unique name to avoid conflicts
+        # Generate unique file ID for processing
         file_id = str(uuid.uuid4())
+        
+        # Save file temporarily for text extraction only
         file_extension = os.path.splitext(file.filename)[1]
-        unique_filename = f"{file_id}_{file.filename}"
-        original_save_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        temp_filename = f"temp_{file_id}_{file.filename}"
+        temp_file_path = os.path.join(UPLOAD_FOLDER, temp_filename)
         
         try:
-            file.save(original_save_path)
+            file.save(temp_file_path)
         except Exception as e:
-            print(f"Error saving file: {e}")
+            print(f"Error saving temporary file: {e}")
             return jsonify({"error": "Failed to save uploaded file"}), 500
 
-        # Extract text and save to extracted_texts folder
+        # Extract text from the temporary file
         try:
-            extracted_text = _extract_text_from_file(original_save_path)
+            extracted_text = _extract_text_from_file(temp_file_path)
         except Exception as e:
             print(f"Error extracting text from file: {e}")
             return jsonify({"error": "Failed to extract text from file"}), 500
-        
-        # Save extracted text to file
-        extracted_filename = f"{file_id}_extracted.txt"
-        extracted_file_path = os.path.join(EXTRACTED_TEXT_FOLDER, extracted_filename)
-        
-        try:
-            with open(extracted_file_path, 'w', encoding='utf-8') as ef:
-                ef.write(extracted_text)
-        except Exception as e:
-            print(f"Error writing extracted text: {e}")
-            return jsonify({"error": "Failed to save extracted text"}), 500
+        finally:
+            # Clean up temporary file immediately after text extraction
+            try:
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+            except Exception as cleanup_error:
+                print(f"Warning: Could not clean up temporary file: {cleanup_error}")
         
         # Process and compress the text using AI
         try:
@@ -1444,55 +1442,57 @@ def import_file():
         structured_data = compression_result.get("structured_data", {})
         compressed_text_content = compression_result.get("compressed_text", "")
         
-        # Save compressed data to file (now includes both structured and compressed text)
-        compressed_filename = f"{file_id}_compressed.json"
-        compressed_file_path = os.path.join(COMPRESSED_DATA_FOLDER, compressed_filename)
-        
-        try:
-            compressed_data = {
-                "structured_data": structured_data,
-                "compressed_text": compressed_text_content,
-                "original_filename": file.filename,
-                "file_id": file_id,
-                "doc_type": doc_type
+        # Create comprehensive data package for database storage
+        processed_data = {
+            "file_id": file_id,
+            "original_filename": file.filename,
+            "doc_type": doc_type,
+            "extracted_text": extracted_text,  # Store full extracted text
+            "structured_data": structured_data,
+            "compressed_text": compressed_text_content,
+            "processing_metadata": {
+                "original_text_length": len(extracted_text),
+                "compressed_text_length": len(compressed_text_content),
+                "structured_items_count": {
+                    "terms": len(structured_data.get("terms", [])),
+                    "definitions": len(structured_data.get("definitions", [])),
+                    "examples": len(structured_data.get("examples", [])),
+                    "questions": len(structured_data.get("questions", [])),
+                    "answers": len(structured_data.get("answers", []))
+                },
+                "processed_at": datetime.now().isoformat()
             }
-            write_compressed_data(compressed_data, compressed_file_path)
-        except Exception as e:
-            print(f"Error writing compressed data: {e}")
-            return jsonify({"error": "Failed to save compressed data"}), 500
+        }
 
-        # Insert file metadata into Supabase
+        # Insert comprehensive file data into Supabase
         try:
-            # Store the full structured data as JSON string in Supabase
-            compressed_data_for_db = {
-                "structured_data": structured_data,
-                "compressed_text": compressed_text_content,
-                "original_filename": file.filename,
-                "file_id": file_id,
-                "doc_type": doc_type
-            }
-            
             response = supabase.table("file_imports").insert({
                 "user_id": user_email,
                 "project_id": project_id,
                 "filename": file.filename,
-                "compressed_text": json.dumps(compressed_data_for_db),  # Store as JSON string
-                "text_length": len(extracted_text) if extracted_text else 0
+                "compressed_text": json.dumps(processed_data),  # Store all processed data as JSON
+                "text_length": len(extracted_text) if extracted_text else 0,
+                "created_at": datetime.now().isoformat()
             }).execute()
 
-            print("Supabase insert response:", response)
+            print(f"Successfully stored processed file data in database for user {user_email}")
 
             if response.data and len(response.data) > 0:
                 inserted_row = response.data[0]
+                
+                # Return success response with database record info
                 return jsonify({
                     "success": True,
                     "message": "File imported and processed successfully",
-                    "file_id": inserted_row["id"],
+                    "file_id": inserted_row["id"],  # Database record ID
                     "original_filename": file.filename,
-                    "extracted_text_length": len(extracted_text) if extracted_text else 0,
                     "doc_type": doc_type,
-                    "path": extracted_file_path,  # Add expected path field
-                    "compressed_path": compressed_file_path  # Add expected compressed_path field
+                    "extracted_text_length": len(extracted_text),
+                    "compressed_text_length": len(compressed_text_content),
+                    "structured_items": processed_data["processing_metadata"]["structured_items_count"],
+                    # Note: No file paths since everything is stored in database
+                    "storage_type": "database",
+                    "database_record_id": inserted_row["id"]
                 }), 200
             else:
                 return jsonify({"error": "Failed to record file import in database"}), 500
@@ -1876,69 +1876,71 @@ def get_uploaded_files(user_id):
 @app.route('/generate-flashcards', methods=['POST'])
 def generate_flashcards():
     """
-    Generates flashcards based on provided context.
+    Generates flashcards based on user's database-stored processed files.
     Logs flashcard generation to Supabase.
     """
     data = request.json
     num_flashcards = data.get('numFlashcards', 10)
-    source_file_paths = data.get('sourceFilePaths', [])
-    compressed_file_paths = data.get('compressedFilePaths', [])
-    user_id = data.get('user_id')  # Get user_id for logging
+    
+    # Get authenticated user
+    user_email = get_authenticated_user()
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
 
     combined_structured_data = {
         "terms": [], "definitions": [], "examples": [], "questions": [], "answers": []
     }
     
-    for path in compressed_file_paths:
-        try:
-            compressed_data = read_compressed_data(path)
-            if compressed_data:
-                # Handle both old format (string) and new format (dict)
-                if isinstance(compressed_data, str):
-                    # If it's a string, it's the old compressed format
-                    print(f"Skipping old format compressed data from {path}")
-                    continue
-                elif isinstance(compressed_data, dict):
-                    # New format - check if it has the expected structure
-                    if "compressed_text" in compressed_data:
-                        # This is the new format where compressed_text contains the actual compressed string
-                        print(f"Found new format compressed data from {path}, but it's a string format")
-                        continue
-                    else:
-                        # This should be the structured format with terms, definitions, etc.
-                        # Safely extract each field with defaults
-                        terms = compressed_data.get("terms", [])
-                        definitions = compressed_data.get("definitions", [])
-                        examples = compressed_data.get("examples", [])
-                        questions = compressed_data.get("questions", [])
-                        answers = compressed_data.get("answers", [])
+    # Get all processed files from database for this user
+    try:
+        response = supabase.table('file_imports').select('compressed_text').eq('user_id', user_email).execute()
+        
+        if response.data:
+            for file_record in response.data:
+                compressed_text = file_record.get('compressed_text', '')
+                if compressed_text:
+                    try:
+                        # Parse the processed data from database
+                        processed_data = json.loads(compressed_text)
                         
-                        # Ensure all are lists
-                        if isinstance(terms, list):
-                            combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
-                        if isinstance(definitions, list):
-                            combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
-                        if isinstance(examples, list):
-                            combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
-                        if isinstance(questions, list):
-                            combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
-                        if isinstance(answers, list):
-                            combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
-        except Exception as e:
-            print(f"Error processing compressed data from {path}: {e}")
-            continue
+                        # Extract structured data
+                        if isinstance(processed_data, dict) and "structured_data" in processed_data:
+                            structured_data = processed_data["structured_data"]
+                            if isinstance(structured_data, dict):
+                                # Safely extract each field with defaults
+                                terms = structured_data.get("terms", [])
+                                definitions = structured_data.get("definitions", [])
+                                examples = structured_data.get("examples", [])
+                                questions = structured_data.get("questions", [])
+                                answers = structured_data.get("answers", [])
+                                
+                                # Ensure all are lists and extend combined data
+                                if isinstance(terms, list):
+                                    combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
+                                if isinstance(definitions, list):
+                                    combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
+                                if isinstance(examples, list):
+                                    combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
+                                if isinstance(questions, list):
+                                    combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
+                                if isinstance(answers, list):
+                                    combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
+                    except json.JSONDecodeError:
+                        print(f"Skipping invalid JSON in compressed_text")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing database record: {e}")
+                        continue
+    except Exception as e:
+        print(f"Error fetching data from database: {e}")
+        return jsonify({"error": "Failed to fetch file data"}), 500
 
     further_compressed_context = _nltk_compress_and_filter(combined_structured_data)
 
     if not further_compressed_context.strip():
-        combined_raw_content = ""
-        for path in source_file_paths:
-            combined_raw_content += read_extracted_text_content(path) + "\n\n"
-        if not combined_raw_content.strip():
-            return jsonify({"error": "No context provided for flashcard generation."}), 400
-        context_for_llm = combined_raw_content
-    else:
-        context_for_llm = further_compressed_context
+        return jsonify({"error": "No processed content available for flashcard generation. Please upload and process files first."}), 400
+    
+    context_for_llm = further_compressed_context
 
     prompt = (
         f"Generate exactly {num_flashcards} flashcards based on the following highly concise study material. "
@@ -1967,17 +1969,20 @@ def generate_flashcards():
             flashcards = response_data
 
         # Log flashcard generation to Supabase
-        if user_id:
-            try:
+        try:
+            # Get user ID from email for logging
+            user_response = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_response.data:
+                user_id = user_response.data[0]["id"]
                 supabase.table('generated_flashcards').insert({
                     "user_id": int(user_id),
                     "flashcard_count": len(flashcards),
                     "flashcards_content": json.dumps(flashcards),
-                    "source_files_count": len(source_file_paths) + len(compressed_file_paths),
+                    "source_files_count": len(response.data) if response.data else 0,
                     "created_at": datetime.now().isoformat()
                 }).execute()
-            except Exception as e:
-                print(f"Error logging flashcard generation: {e}")
+        except Exception as e:
+            print(f"Error logging flashcard generation: {e}")
 
         return jsonify({"flashcards": flashcards})
 
@@ -1991,71 +1996,74 @@ def generate_flashcards():
 @app.route('/generate-test', methods=['POST'])
 def generate_test():
     """
-    Generates a test based on provided context.
+    Generates a test based on user's database-stored processed files.
     Logs test generation to Supabase.
     """
     data = request.json
-    test_name = data.get('testName', 'Generated Test')
-    question_type = data.get('questionType', 'multiple_choice')
-    num_questions = data.get('numQuestions', 10)
-    source_file_paths = data.get('sourceFilePaths', [])
-    compressed_file_paths = data.get('compressedFilePaths', [])
-    user_id = data.get('user_id')  # Get user_id for logging
+    config = data.get('config', {})
+    test_name = config.get('name', 'Generated Test')
+    question_type = config.get('type', 'mcq')
+    num_questions = config.get('questionCount', 10)
+    
+    # Get authenticated user
+    user_email = get_authenticated_user()
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
 
     combined_structured_data = {
         "terms": [], "definitions": [], "examples": [], "questions": [], "answers": []
     }
     
-    for path in compressed_file_paths:
-        try:
-            compressed_data = read_compressed_data(path)
-            if compressed_data:
-                # Handle both old format (string) and new format (dict)
-                if isinstance(compressed_data, str):
-                    # If it's a string, it's the old compressed format
-                    print(f"Skipping old format compressed data from {path}")
-                    continue
-                elif isinstance(compressed_data, dict):
-                    # New format - check if it has the expected structure
-                    if "compressed_text" in compressed_data:
-                        # This is the new format where compressed_text contains the actual compressed string
-                        print(f"Found new format compressed data from {path}, but it's a string format")
-                        continue
-                    else:
-                        # This should be the structured format with terms, definitions, etc.
-                        # Safely extract each field with defaults
-                        terms = compressed_data.get("terms", [])
-                        definitions = compressed_data.get("definitions", [])
-                        examples = compressed_data.get("examples", [])
-                        questions = compressed_data.get("questions", [])
-                        answers = compressed_data.get("answers", [])
+    # Get all processed files from database for this user
+    try:
+        response = supabase.table('file_imports').select('compressed_text').eq('user_id', user_email).execute()
+        
+        if response.data:
+            for file_record in response.data:
+                compressed_text = file_record.get('compressed_text', '')
+                if compressed_text:
+                    try:
+                        # Parse the processed data from database
+                        processed_data = json.loads(compressed_text)
                         
-                        # Ensure all are lists
-                        if isinstance(terms, list):
-                            combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
-                        if isinstance(definitions, list):
-                            combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
-                        if isinstance(examples, list):
-                            combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
-                        if isinstance(questions, list):
-                            combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
-                        if isinstance(answers, list):
-                            combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
-        except Exception as e:
-            print(f"Error processing compressed data from {path}: {e}")
-            continue
+                        # Extract structured data
+                        if isinstance(processed_data, dict) and "structured_data" in processed_data:
+                            structured_data = processed_data["structured_data"]
+                            if isinstance(structured_data, dict):
+                                # Safely extract each field with defaults
+                                terms = structured_data.get("terms", [])
+                                definitions = structured_data.get("definitions", [])
+                                examples = structured_data.get("examples", [])
+                                questions = structured_data.get("questions", [])
+                                answers = structured_data.get("answers", [])
+                                
+                                # Ensure all are lists and extend combined data
+                                if isinstance(terms, list):
+                                    combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
+                                if isinstance(definitions, list):
+                                    combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
+                                if isinstance(examples, list):
+                                    combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
+                                if isinstance(questions, list):
+                                    combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
+                                if isinstance(answers, list):
+                                    combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
+                    except json.JSONDecodeError:
+                        print(f"Skipping invalid JSON in compressed_text")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing database record: {e}")
+                        continue
+    except Exception as e:
+        print(f"Error fetching data from database: {e}")
+        return jsonify({"error": "Failed to fetch file data"}), 500
 
     further_compressed_context = _nltk_compress_and_filter(combined_structured_data)
 
     if not further_compressed_context.strip():
-        combined_raw_content = ""
-        for path in source_file_paths:
-            combined_raw_content += read_extracted_text_content(path) + "\n\n"
-        if not combined_raw_content.strip():
-            return jsonify({"error": "No content available to generate test."}), 400
-        context_for_llm = combined_raw_content
-    else:
-        context_for_llm = further_compressed_context
+        return jsonify({"error": "No processed content available for test generation. Please upload and process files first."}), 400
+    
+    context_for_llm = further_compressed_context
 
 
     prompt = (
@@ -2081,19 +2089,22 @@ def generate_test():
         test_content = chat_completion.choices[0].message.content
 
         # Log test generation to Supabase
-        if user_id:
-            try:
+        try:
+            # Get user ID from email for logging
+            user_response = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_response.data:
+                user_id = user_response.data[0]["id"]
                 supabase.table('generated_tests').insert({
                     "user_id": int(user_id),
                     "test_name": test_name,
                     "question_type": question_type,
                     "num_questions": num_questions,
                     "test_content": test_content,
-                    "source_files_count": len(source_file_paths) + len(compressed_file_paths),
+                    "source_files_count": len(response.data) if response.data else 0,
                     "created_at": datetime.now().isoformat()
                 }).execute()
-            except Exception as e:
-                print(f"Error logging test generation: {e}")
+        except Exception as e:
+            print(f"Error logging test generation: {e}")
 
         return jsonify({"testContent": test_content})
 
@@ -2104,71 +2115,73 @@ def generate_test():
 @app.route('/generate-notes', methods=['POST'])
 def generate_notes():
     """
-    Generates detailed notes based on a topic and provided context (from selected node and uploaded files).
-    Expects {topic: string, existingContent: string, sourceFilePaths: [], compressedFilePaths: []}
+    Generates detailed notes based on a topic and user's database-stored processed files.
+    Expects {topic: string, existingContent: string}
     """
     data = request.json
     topic = data.get('topic', 'General Study Notes')
     existing_content = data.get('existingContent', '')
-    source_file_paths = data.get('sourceFilePaths', [])
-    compressed_file_paths = data.get('compressedFilePaths', [])
-    user_id = data.get('user_id')  # Get user_id for logging
+    
+    # Get authenticated user
+    user_email = get_authenticated_user()
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
 
     combined_structured_data = {
         "terms": [], "definitions": [], "examples": [], "questions": [], "answers": []
     }
-    for path in compressed_file_paths:
-        try:
-            compressed_data = read_compressed_data(path)
-            if compressed_data:
-                # Handle both old format (string) and new format (dict)
-                if isinstance(compressed_data, str):
-                    # If it's a string, it's the old compressed format
-                    print(f"Skipping old format compressed data from {path}")
-                    continue
-                elif isinstance(compressed_data, dict):
-                    # New format - check if it has the expected structure
-                    if "compressed_text" in compressed_data:
-                        # This is the new format where compressed_text contains the actual compressed string
-                        print(f"Found new format compressed data from {path}, but it's a string format")
-                        continue
-                    else:
-                        # This should be the structured format with terms, definitions, etc.
-                        # Safely extract each field with defaults
-                        terms = compressed_data.get("terms", [])
-                        definitions = compressed_data.get("definitions", [])
-                        examples = compressed_data.get("examples", [])
-                        questions = compressed_data.get("questions", [])
-                        answers = compressed_data.get("answers", [])
+    
+    # Get all processed files from database for this user
+    try:
+        response = supabase.table('file_imports').select('compressed_text').eq('user_id', user_email).execute()
+        
+        if response.data:
+            for file_record in response.data:
+                compressed_text = file_record.get('compressed_text', '')
+                if compressed_text:
+                    try:
+                        # Parse the processed data from database
+                        processed_data = json.loads(compressed_text)
                         
-                        # Ensure all are lists
-                        if isinstance(terms, list):
-                            combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
-                        if isinstance(definitions, list):
-                            combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
-                        if isinstance(examples, list):
-                            combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
-                        if isinstance(questions, list):
-                            combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
-                        if isinstance(answers, list):
-                            combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
-        except Exception as e:
-            print(f"Error processing compressed data from {path}: {e}")
-            continue
+                        # Extract structured data
+                        if isinstance(processed_data, dict) and "structured_data" in processed_data:
+                            structured_data = processed_data["structured_data"]
+                            if isinstance(structured_data, dict):
+                                # Safely extract each field with defaults
+                                terms = structured_data.get("terms", [])
+                                definitions = structured_data.get("definitions", [])
+                                examples = structured_data.get("examples", [])
+                                questions = structured_data.get("questions", [])
+                                answers = structured_data.get("answers", [])
+                                
+                                # Ensure all are lists and extend combined data
+                                if isinstance(terms, list):
+                                    combined_structured_data["terms"].extend([t for t in terms if t and t not in combined_structured_data["terms"]])
+                                if isinstance(definitions, list):
+                                    combined_structured_data["definitions"].extend([d for d in definitions if d and d not in combined_structured_data["definitions"]])
+                                if isinstance(examples, list):
+                                    combined_structured_data["examples"].extend([e for e in examples if e and e not in combined_structured_data["examples"]])
+                                if isinstance(questions, list):
+                                    combined_structured_data["questions"].extend([q for q in questions if q and q not in combined_structured_data["questions"]])
+                                if isinstance(answers, list):
+                                    combined_structured_data["answers"].extend([a for a in answers if a and a not in combined_structured_data["answers"]])
+                    except json.JSONDecodeError:
+                        print(f"Skipping invalid JSON in compressed_text")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing database record: {e}")
+                        continue
+    except Exception as e:
+        print(f"Error fetching data from database: {e}")
+        return jsonify({"error": "Failed to fetch file data"}), 500
 
     # Further compress the combined structured data for notes generation context
     further_compressed_context = _nltk_compress_and_filter(combined_structured_data)
 
     if not further_compressed_context.strip() and not existing_content.strip():
-        # Fallback to raw text if structured data is empty
-        combined_raw_content = ""
-        for path in source_file_paths:
-            combined_raw_content += read_extracted_text_content(path) + "\n\n"
-        if not combined_raw_content.strip():
-            return jsonify({"error": "No context provided for notes generation."}), 400
-        context_for_llm = combined_raw_content
-    else:
-        context_for_llm = further_compressed_context
+        return jsonify({"error": "No processed content or existing content available for notes generation. Please upload and process files first."}), 400
+    
+    context_for_llm = further_compressed_context
 
 
     prompt = (
@@ -2192,17 +2205,20 @@ def generate_notes():
         notes_content = chat_completion.choices[0].message.content
 
         # Log notes generation to Supabase
-        if user_id:
-            try:
+        try:
+            # Get user ID from email for logging
+            user_response = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_response.data:
+                user_id = user_response.data[0]["id"]
                 supabase.table('generated_notes').insert({
                     "user_id": int(user_id),
                     "topic": topic,
                     "notes_content": notes_content,
-                    "source_files_count": len(source_file_paths) + len(compressed_file_paths),
+                    "source_files_count": len(response.data) if response.data else 0,
                     "created_at": datetime.now().isoformat()
                 }).execute()
-            except Exception as e:
-                print(f"Error logging notes generation: {e}")
+        except Exception as e:
+            print(f"Error logging notes generation: {e}")
 
         return jsonify({"notesContent": notes_content})
 
@@ -2369,15 +2385,12 @@ def generate_study_guide():
 @app.route('/autofill-info', methods=['POST'])
 def autofill_info():
     """
-    Autofills or expands information for a given topic.
+    Autofills or expands information for a given topic using user's database-stored processed files.
     Logs autofill usage to Supabase.
     """
     data = request.json
     topic = data.get('topic', '')
     existing_content = data.get('existingContent', '')
-    source_file_paths = data.get('sourceFilePaths', [])
-    compressed_file_paths = data.get('compressed_file_paths', [])
-    user_id = data.get('user_id')  # Get user_id for logging
 
     if not topic:
         return jsonify({"error": "No topic provided for autofill."}), 400
@@ -2455,25 +2468,34 @@ def autofill_info():
         print(f"Error fetching data from Supabase: {e}")
         return jsonify({"error": "Failed to fetch file data"}), 500
 
-    further_compressed_context = _nltk_compress_and_filter(combined_structured_data)
+    # Use JWT to extract user info for context selection
+    from flask import request
+    import jwt
 
-    if not further_compressed_context.strip() and not existing_content.strip():
-        combined_raw_content = ""
-        for path in source_file_paths:
-            combined_raw_content += read_extracted_text_content(path) + "\n\n"
-        if not combined_raw_content.strip():
-            return jsonify({"error": "No context available for autofill."}), 400
-        context_for_llm = combined_raw_content
+    # Get JWT from Authorization header
+    auth_header = request.headers.get('Authorization', None)
+    user_email = None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        try:
+            # Replace 'your_jwt_secret' with your actual JWT secret or use your JWT decode logic
+            decoded = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            user_email = decoded.get("email")
+        except Exception as e:
+            print(f"JWT decode error: {e}")
+            return jsonify({"error": "Invalid or expired token."}), 401
     else:
-        context_for_llm = further_compressed_context
+        return jsonify({"error": "Authorization token missing."}), 401
 
+
+#//{context_for_llm} for actually making work
     prompt = f"""
 You are an AI assistant trained to highlight only specific terms and definitions in academics.
 
 Topic: {topic}
 
 Context:
-{context_for_llm}
+
 
 Instructions:
 Generate exactly 5 bullet points, one each on the following:
@@ -2508,17 +2530,20 @@ DO NOT ADD ANY EXTRA WORDS, BULLETPOINTS, SPACES, ENTERS, OR ANYTHING ELSE THAT 
         filled_content = chat_completion.choices[0].message.content
 
         # Log autofill usage to Supabase
-        if user_id:
-            try:
+        try:
+            # Get user ID from email for logging
+            user_response = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_response.data:
+                user_id = user_response.data[0]["id"]
                 supabase.table('autofill_usage').insert({
                     "user_id": int(user_id),
                     "topic": topic,
                     "filled_content": filled_content,
-                    "source_files_count": len(source_file_paths) + len(compressed_file_paths),
+                    "source_files_count": len(response.data) if response.data else 0,
                     "created_at": datetime.now().isoformat()
                 }).execute()
-            except Exception as e:
-                print(f"Error logging autofill usage: {e}")
+        except Exception as e:
+            print(f"Error logging autofill usage: {e}")
 
         return jsonify({"filledContent": filled_content})
 
