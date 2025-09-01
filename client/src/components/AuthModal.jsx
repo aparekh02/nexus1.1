@@ -11,8 +11,8 @@ import { X } from 'lucide-react'
 const API_BASE_URL = 'https://nexus-backend-f2td.onrender.com'
 axios.defaults.baseURL = API_BASE_URL
 
-// Configure axios to include credentials (cookies) with all requests
-axios.defaults.withCredentials = true
+// Configure axios to use JWT tokens instead of cookies
+axios.defaults.withCredentials = false
 
 // Predefined class options (matching the Flask backend)
 const CLASSES = ["Math", "Science", "History", "Art", "Computer Science", "English"]
@@ -94,12 +94,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const handleAuthSuccess = (userData, message) => {
     // Store user data in localStorage
     if (userData) {
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      // Set authorization header for future requests
-      if (userData.access_token) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${userData.access_token}`;
+      // Store the JWT token separately for easy access
+      if (userData.token) {
+        localStorage.setItem('jwt_token', userData.token);
+        // Set authorization header for future requests
+        axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
       }
+      
+      // Store user data without the token
+      const userDataWithoutToken = { ...userData };
+      delete userDataWithoutToken.token;
+      localStorage.setItem('user', JSON.stringify(userDataWithoutToken));
     }
     
     // Show success message
@@ -152,8 +157,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }, {
         headers: {
           'Content-Type': 'application/json',
-        },
-        withCredentials: true
+        }
       });
       
       // Handle JSON response from Flask backend
@@ -198,8 +202,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }, {
         headers: {
           'Content-Type': 'application/json',
-        },
-        withCredentials: true
+        }
       });
 
       // Handle JSON response from Flask backend

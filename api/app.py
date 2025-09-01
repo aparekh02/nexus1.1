@@ -3,7 +3,6 @@ import functools
 import io
 import json
 import os
-from pickle import FALSE
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -14,16 +13,15 @@ import fitz  # PyMuPDF
 import nltk
 import pytesseract
 from dotenv import dotenv_values
-from flask import Flask, jsonify, make_response, request, session
+from flask import Flask, jsonify, make_response, request
 from flask_cors import CORS
-from flask_session import Session
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import sent_tokenize, word_tokenize
 from PIL import Image
-import redis
 from supabase import Client, create_client
 from werkzeug.security import check_password_hash, generate_password_hash
+import jwt
 
 nltk.download('punkt_tab')
 
@@ -80,11 +78,10 @@ from groq import Groq
 app = Flask(__name__)
 
 # --- CORS Configuration for Frontend-to-Backend Connection ---
-# The key change: use CORS_ALLOW_CREDENTIALS (not CORS_ALLOWED_CREDENTIALS)
-# and ensure credentials are allowed for the frontend origin.
+# Using JWT tokens instead of sessions, so no credentials needed
 CORS(app,
      origins=["https://nexus-frontend-y7uh.onrender.com"],
-     supports_credentials=True,
+     supports_credentials=False,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 )
@@ -94,28 +91,10 @@ UPLOAD_FOLDER = os.path.join("uploads")
 EXTRACTED_TEXT_FOLDER = os.path.join("extracted_texts")
 COMPRESSED_DATA_FOLDER = os.path.join("compressed_data")
 
-# Configure Flask session for persistence
-app.secret_key = sb_config.get("FLASK_SECRET_KEY")
-
-# Redis configuration
-REDIS_HOST = sb_config.get("REDIS_HOST")
-REDIS_PORT = sb_config.get("REDIS_PORT") #int
-REDIS_PASSWORD = sb_config.get("REDIS_PASSWORD")
-REDIS_DB = sb_config.get("REDIS_DB") #int
-
-# Session configuration
-app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_REDIS'] = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASSWORD,
-    db=REDIS_DB,
-    decode_responses=True
-)
-app.config['PERMANENT_SESSION_LIFETIME'] = FALSE
-
-# Initialize Flask-Session
-Session(app)
+# JWT Configuration
+JWT_SECRET_KEY = sb_config.get("FLASK_SECRET_KEY")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
 
 # Create directories if they don't exist
 for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
@@ -129,48 +108,58 @@ for folder in [UPLOAD_FOLDER, EXTRACTED_TEXT_FOLDER, COMPRESSED_DATA_FOLDER]:
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
+def create_jwt_token(user_email):
+    """Create a JWT token for the user"""
+    payload = {
+        'email': user_email,
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+def verify_jwt_token(token):
+    """Verify and decode a JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload['email']
+    except jwt.ExpiredSignatureError:
+        print("JWT token has expired")
+        return None
+    except jwt.InvalidTokenError:
+        print("Invalid JWT token")
+        return None
+
 def get_authenticated_user():
     """
-    Get the authenticated user from session or Supabase JWT
+    Get the authenticated user from JWT token in Authorization header
     Returns the user's email if authenticated and exists in users table, None otherwise
     """
     try:
-        # First check if user is in session (from login)
-        user_email = session.get("user_email")
-        if user_email:
-            print(f"User found in session: {user_email}")
-            return user_email
-            
-        # If not in session, try Authorization header
+        # Get JWT token from Authorization header
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            print("No session user or valid Authorization header found")
+            print("No valid Authorization header found")
             return None
         
-        # Extract the JWT token
+        # Extract and verify the JWT token
         token = auth_header.split(" ")[1]
+        user_email = verify_jwt_token(token)
         
-        # Get user from Supabase using the token
-        user_response = supabase.auth.get_user(token)
+        if not user_email:
+            print("Invalid or expired JWT token")
+            return None
         
-        if user_response.user and user_response.user.email:
-            user_email = user_response.user.email
-            
-            # Verify the email exists in our users table
-            try:
-                user_check = supabase.table("users").select("email").eq("email", user_email).execute()
-                if user_check.data:
-                    # User exists in our users table
-                    print(f"Authenticated user verified via JWT: {user_email}")
-                    return user_email
-                else:
-                    # User authenticated with Supabase but not in our users table
-                    print(f"Warning: User {user_email} authenticated but not found in users table")
-                    return None
-            except Exception as db_error:
-                print(f"Error checking user in users table: {db_error}")
+        # Verify the email exists in our users table
+        try:
+            user_check = supabase.table("users").select("email").eq("email", user_email).execute()
+            if user_check.data:
+                print(f"Authenticated user verified via JWT: {user_email}")
+                return user_email
+            else:
+                print(f"Warning: User {user_email} authenticated but not found in users table")
                 return None
-        else:
+        except Exception as db_error:
+            print(f"Error checking user in users table: {db_error}")
             return None
             
     except Exception as e:
@@ -1585,8 +1574,8 @@ def signup():
 
         if response.data:
             user = response.data[0]
-            # Set session cookie for authentication (for withCredentials)
-            session["user_email"] = user["email"]
+            # Create JWT token for authentication
+            token = create_jwt_token(user["email"])
             return jsonify({
                 "success": True,
                 "message": "Account created successfully!",
@@ -1596,7 +1585,8 @@ def signup():
                     "email": user.get('email'),
                     "school": user.get('school'),
                     "classes": user.get('classes')
-                }
+                },
+                "token": token
             }), 201
         else:
             return jsonify({
@@ -1658,8 +1648,8 @@ def login():
         except Exception as update_err:
             print(f"Warning: Could not update last_login: {update_err}")
 
-        # Set session cookie for authentication (for withCredentials)
-        session["user_email"] = user["email"]
+        # Create JWT token for authentication
+        token = create_jwt_token(user["email"])
 
         # Prepare user object for frontend (no password hash)
         user_obj = {
@@ -1673,7 +1663,8 @@ def login():
         return jsonify({
             "success": True,
             "message": "Logged in successfully",
-            "user": user_obj
+            "user": user_obj,
+            "token": token
         }), 200
 
     except Exception as e:
@@ -2606,7 +2597,13 @@ def create_api_project():
     """
     Create a new project with full user validation and comprehensive project creation
     """
-    user_email = session.get('user_email')  # Assuming user email is stored in session
+    user_email = get_authenticated_user()
+    if not user_email:
+        return jsonify({
+            'success': False,
+            'message': 'User not authenticated. Please log in to create projects.'
+        }), 401
+    
     print(f"Authenticated user creating project: {user_email}")
 
     
@@ -2619,13 +2616,6 @@ def create_api_project():
                 'success': False,
                 'message': 'Missing required fields: title, description, and subject are required'
             }), 400
-        
-        # Get authenticated user email from session or JWT
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'message': 'User not authenticated. Please log in to create projects.'
-            }), 401
         
         print(f"Authenticated user creating project: {user_email}")
         
@@ -3038,23 +3028,18 @@ def like_post(post_id):
 @app.route('/logout', methods=['POST'])
 def logout():
     """
-    Logout user and clear session
+    Logout user (JWT tokens are stateless, so just return success)
     """
     try:
-        user_email = session.get('user_email')
+        # Get user email from JWT token for logging purposes
+        user_email = get_authenticated_user()
         if user_email:
             print(f"User {user_email} is logging out")
         else:
-            print("No user found in session during logout attempt")
+            print("No valid JWT token found during logout attempt")
         
-        # Clear the session completely
-        session.clear()
-        
-        # Verify session is cleared
-        if 'user_email' not in session:
-            print("Session cleared successfully")
-        else:
-            print("Warning: Session may not have been cleared properly")
+        # JWT tokens are stateless, so no server-side cleanup needed
+        # The frontend should remove the token from localStorage
         
         return jsonify({
             "success": True,

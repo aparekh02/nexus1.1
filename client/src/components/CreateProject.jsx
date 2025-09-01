@@ -61,6 +61,7 @@ export default function CreateProject({ onBack, onProjectCreated }) {
 
     try {
       // Send project data to Flask backend using new endpoint
+      const token = localStorage.getItem('jwt_token')
       const response = await axios.post('${API_BASE_URL}/api/projects', {
         title: projectData.title.trim(),
         description: projectData.description.trim(),
@@ -71,9 +72,8 @@ export default function CreateProject({ onBack, onProjectCreated }) {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token || ''}`
-        },
-        withCredentials: true
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (response.data.success) {
@@ -134,11 +134,12 @@ export default function CreateProject({ onBack, onProjectCreated }) {
         formData.append('file', file)
         formData.append('project_id', createdProject?.id || 'temp')
         
+        const token = localStorage.getItem('jwt_token')
         const response = await axios.post('${API_BASE_URL}/api/files', formData, {
           headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          withCredentials: true
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`
+          }
         })
 
         if (response.data.success) {
@@ -153,9 +154,12 @@ export default function CreateProject({ onBack, onProjectCreated }) {
 
   const handleDeleteFile = async (fileId) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}/api/files/${fileId}`, {
-        withCredentials: true
-      })
+              const token = localStorage.getItem('jwt_token')
+        const response = await axios.delete(`${API_BASE_URL}/api/files/${fileId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
 
       if (response.data.success) {
         setUploadedFiles(prev => prev.filter(f => f.id !== fileId))
@@ -176,13 +180,16 @@ export default function CreateProject({ onBack, onProjectCreated }) {
     setError('')
 
     try {
+      const token = localStorage.getItem('jwt_token')
       const response = await axios.post('${API_BASE_URL}/api/ai-tools/execute', {
         tool_name: toolName,
         input: projectData.description,
         project_id: createdProject?.id || 'temp',
         selected_files: uploadedFiles.map(f => f.id)
       }, {
-        withCredentials: true
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (response.data.success) {

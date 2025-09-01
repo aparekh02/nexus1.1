@@ -101,14 +101,14 @@ export default function ProjectFeed() {
       return;
     }
     try {
+      const token = localStorage.getItem('jwt_token')
       const response = await axios.post(`${API_BASE_URL}/api/posts/${postId}/like`, {
         user_id: user.email // Assuming user.email is the user_id for likes
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token || ''}`
-        },
-        withCredentials: true
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.data.success) {
@@ -163,14 +163,14 @@ export default function ProjectFeed() {
     }
 
     try {
+      const token = localStorage.getItem('jwt_token')
       const response = await axios.post(`${API_BASE_URL}/api/posts/${postId}/comments`, {
         comment_text: newCommentText.trim()
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token || ''}`
-        },
-        withCredentials: true
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.data.success) {
@@ -194,6 +194,7 @@ export default function ProjectFeed() {
     setPosting(true)
     try {
       // Use the same exact structure as CreateProject.jsx
+      const token = localStorage.getItem('jwt_token')
       const response = await axios.post('${API_BASE_URL}/api/projects', {
         title: projectName.trim(),
         description: description.trim(),
@@ -204,9 +205,8 @@ export default function ProjectFeed() {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token || ''}`
-        },
-        withCredentials: true
+          'Authorization': `Bearer ${token}`
+        }
       })
       
       if (response.data.success) {
